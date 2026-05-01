@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Number Duel</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main id="app">
+
+  <section class="screen" data-screen="menu">
+    <div class="hero">
+      <h1>Number Duel</h1>
+      <p class="tagline">Guess your opponent's 4-digit number</p>
+    </div>
+    <div class="actions">
+      <button class="primary" id="btn-host">Host Game</button>
+      <button class="secondary" id="btn-join">Join Game</button>
+    </div>
+  </section>
+
+  <section class="screen" data-screen="hosting" hidden>
+    <h2>Share this code</h2>
+    <div class="code-display" id="room-code">····</div>
+    <p class="hint">Have your opponent tap "Join Game" and enter this code.</p>
+    <p class="status" id="host-status">Connecting…</p>
+    <button class="secondary" data-action="back-to-menu">Cancel</button>
+  </section>
+
+  <section class="screen" data-screen="joining" hidden>
+    <h2>Enter game code</h2>
+    <input class="code-input" id="join-code" maxlength="4" autocomplete="off" autocapitalize="characters" inputmode="text" placeholder="ABCD">
+    <button class="primary" id="btn-connect">Connect</button>
+    <p class="status" id="join-status"></p>
+    <button class="secondary" data-action="back-to-menu">Back</button>
+  </section>
+
+  <section class="screen" data-screen="setup" hidden>
+    <h2>Pick your secret number</h2>
+    <p class="hint">4 digits. Your opponent will try to guess this.</p>
+    <input class="digit-input" id="secret-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="••••">
+    <button class="primary" id="btn-ready">Ready</button>
+    <p class="status" id="setup-status">Enter your number and tap Ready.</p>
+    <button class="secondary" data-action="back-to-menu">Leave</button>
+  </section>
+
+  <section class="screen" data-screen="game" hidden>
+    <header class="game-header">
+      <div class="my-secret-block">
+        <span class="label">Your secret</span>
+        <span class="my-secret" id="my-secret"></span>
+      </div>
+      <div class="turn-indicator" id="turn-indicator">Your turn</div>
+    </header>
+
+    <div class="guess-area">
+      <input class="digit-input" id="guess-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="••••">
+      <button class="primary" id="btn-guess">Submit guess</button>
+    </div>
+
+    <div class="history">
+      <div class="history-column">
+        <h3>Your guesses</h3>
+        <ul id="my-guesses"></ul>
+      </div>
+      <div class="history-column">
+        <h3>Their guesses</h3>
+        <ul id="their-guesses"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" data-screen="gameover" hidden>
+    <div class="hero">
+      <h1 id="gameover-title">You won!</h1>
+      <p id="gameover-detail" class="tagline"></p>
+    </div>
+    <div class="actions">
+      <button class="primary" id="btn-rematch">Rematch</button>
+      <button class="secondary" id="btn-quit">Back to menu</button>
+    </div>
+  </section>
+
+  <div class="banner" id="disconnect-banner" hidden>
+    <span>Connection lost</span>
+    <button data-action="back-to-menu">Menu</button>
+  </div>
+
+</main>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

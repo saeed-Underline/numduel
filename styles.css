@@ -1,0 +1,267 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-2: #273449;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --red: #ef4444;
+  --border: #334155;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+#app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px 20px;
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.screen[hidden] { display: none; }
+
+.hero {
+  margin-top: auto;
+  text-align: center;
+}
+.actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+h1 {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+h2 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.tagline {
+  color: var(--muted);
+  font-size: 16px;
+}
+.hint {
+  color: var(--muted);
+  font-size: 14px;
+}
+.status {
+  color: var(--muted);
+  font-size: 14px;
+  min-height: 20px;
+}
+
+button {
+  width: 100%;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 600;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, transform 0.1s;
+}
+button:active { transform: scale(0.98); }
+
+button.primary {
+  background: var(--accent);
+  color: white;
+}
+button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+button.primary:disabled {
+  background: var(--surface);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+button.secondary:hover { background: var(--surface); }
+
+.code-display {
+  font-size: 64px;
+  font-weight: 800;
+  letter-spacing: 0.25em;
+  text-align: center;
+  padding: 32px 16px;
+  background: var(--surface);
+  border-radius: 16px;
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  text-indent: 0.25em; /* visually centers letter-spaced text */
+}
+
+.code-input,
+.digit-input {
+  width: 100%;
+  padding: 20px;
+  font-size: 32px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.3em;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  text-transform: uppercase;
+  text-indent: 0.3em;
+}
+.code-input:focus,
+.digit-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ---- Game screen ---- */
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+  padding: 12px 16px;
+  border-radius: 12px;
+  gap: 12px;
+}
+.my-secret-block .label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+.my-secret {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  letter-spacing: 0.1em;
+}
+.turn-indicator {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.turn-indicator.waiting {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.guess-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.history-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.history ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 2px;
+}
+
+.guess-row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+.guess-cell {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  border-radius: 6px;
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  color: white;
+}
+.guess-cell.green  { background: var(--green); }
+.guess-cell.yellow { background: var(--yellow); color: #1f1f1f; }
+.guess-cell.red    { background: var(--red); }
+
+/* ---- Disconnect banner ---- */
+.banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--red);
+  color: white;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  z-index: 50;
+  font-weight: 600;
+}
+.banner button {
+  width: auto;
+  padding: 8px 16px;
+  background: white;
+  color: var(--red);
+  font-size: 14px;
+}
