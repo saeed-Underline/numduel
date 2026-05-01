@@ -7,16 +7,19 @@
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const CODE_LEN = 4;
 
-  // Broker config. Leave null to use the PeerJS public broker (good for local dev).
-  // After deploying your own broker, set to the example object below.
-  const BROKER_OPTS = null;
-  // Example for self-hosted broker reachable at /peerjs on the same origin:
-  // const BROKER_OPTS = {
-  //   host: location.hostname,
-  //   port: location.port ? Number(location.port) : (location.protocol === 'https:' ? 443 : 80),
-  //   path: '/peerjs',
-  //   secure: location.protocol === 'https:',
-  // };
+  // Broker auto-detection:
+  // - localhost / 127.0.0.1 / file:// : use the PeerJS public broker (no setup for local dev).
+  // - any other hostname: assume a self-hosted broker is reachable at /peerjs on the same origin.
+  const BROKER_OPTS = (function () {
+    const h = location.hostname;
+    if (!h || h === 'localhost' || h === '127.0.0.1') return null;
+    return {
+      host: h,
+      port: location.port ? Number(location.port) : (location.protocol === 'https:' ? 443 : 80),
+      path: '/peerjs',
+      secure: location.protocol === 'https:',
+    };
+  })();
 
   function newPeer(id) {
     if (id && BROKER_OPTS) return new Peer(id, BROKER_OPTS);
