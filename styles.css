@@ -34,6 +34,7 @@ html, body {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+  gap: 16px;
 }
 
 .screen {
@@ -41,6 +42,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  animation: fadeIn 0.3s ease-out;
 }
 .screen[hidden] { display: none; }
 
@@ -186,6 +188,10 @@ button.secondary:hover { background: var(--surface); }
   font-weight: 600;
   font-size: 13px;
   white-space: nowrap;
+  transition: background 0.25s, color 0.25s;
+}
+.turn-indicator:not(.waiting) {
+  animation: turnPop 0.4s ease-out;
 }
 .turn-indicator.waiting {
   background: var(--surface-2);
@@ -224,6 +230,7 @@ button.secondary:hover { background: var(--surface); }
   display: flex;
   gap: 4px;
   justify-content: center;
+  perspective: 600px;
 }
 .guess-cell {
   width: 34px;
@@ -236,28 +243,31 @@ button.secondary:hover { background: var(--surface); }
   border-radius: 6px;
   font-family: "SF Mono", "Monaco", "Consolas", monospace;
   color: white;
+  animation: flipIn 0.45s cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
+.guess-cell:nth-child(1) { animation-delay: 0.00s; }
+.guess-cell:nth-child(2) { animation-delay: 0.10s; }
+.guess-cell:nth-child(3) { animation-delay: 0.20s; }
+.guess-cell:nth-child(4) { animation-delay: 0.30s; }
 .guess-cell.green  { background: var(--green); }
 .guess-cell.yellow { background: var(--yellow); color: #1f1f1f; }
 .guess-cell.red    { background: var(--red); }
 
 /* ---- Disconnect banner ---- */
 .banner {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
   background: var(--red);
   color: white;
   padding: 12px 16px;
-  padding-top: max(12px, env(safe-area-inset-top));
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  z-index: 50;
   font-weight: 600;
+  border-radius: 12px;
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* Override the .banner display: flex so the [hidden] attribute actually hides it. */
+.banner[hidden] { display: none; }
 .banner button {
   width: auto;
   padding: 8px 16px;
@@ -266,7 +276,21 @@ button.secondary:hover { background: var(--surface); }
   font-size: 14px;
 }
 
-/* Push the page content down so the banner doesn't cover anything when visible. */
-#app:has(#disconnect-banner:not([hidden])) {
-  padding-top: calc(72px + max(24px, env(safe-area-inset-top)));
+/* ---- Animations ---- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes flipIn {
+  from { transform: rotateX(-90deg); opacity: 0.4; }
+  to   { transform: rotateX(0); opacity: 1; }
+}
+@keyframes turnPop {
+  0%   { transform: scale(0.85); }
+  60%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
 }
