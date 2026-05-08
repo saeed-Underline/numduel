@@ -162,13 +162,306 @@ button.secondary:hover { background: var(--surface); }
   line-height: 1.4;
 }
 
-/* ---- Digits picker ---- */
-.digits-options {
+/* ---- Digits / players picker (shared button stack) ---- */
+.digits-options,
+.players-options {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.digits-options[hidden] { display: none; }
+.digits-options[hidden],
+.players-options[hidden] { display: none; }
+
+/* ---- Lobby roster (Silver hosting / joining screens) ---- */
+.roster {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+}
+.roster:empty { display: none; }
+.roster-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  animation: slideInLeft 0.3s ease-out;
+}
+.roster-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+.roster-tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  padding: 2px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+}
+
+.lobby[hidden] { display: none; }
+.lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---- Silver game screen ---- */
+.silver-screen {
+  gap: 10px;
+}
+.silver-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-radius: 10px;
+}
+.silver-round {
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.silver-piles {
+  display: flex;
+  gap: 12px;
+}
+.silver-pile {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.silver-pile-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.silver-pile-count {
+  font-size: 22px;
+  font-weight: 800;
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+}
+.silver-pile-top {
+  font-size: 14px;
+  font-weight: 700;
+}
+.silver-others {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.silver-other {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.silver-other-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+.silver-other-name {
+  font-weight: 700;
+}
+.silver-amulet-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+  color: var(--bg);
+  background: linear-gradient(90deg, #d4af37, #f5d76e);
+  border-radius: 999px;
+}
+.silver-other-score {
+  color: var(--muted);
+  font-size: 12px;
+}
+.silver-village {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+.silver-village-self {
+  margin-top: 4px;
+}
+.silver-village-other .silver-card {
+  width: 36px;
+  height: 50px;
+  font-size: 14px;
+}
+.silver-village-other .silver-card-name {
+  font-size: 7px;
+}
+.silver-self {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.silver-self-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.silver-card {
+  width: 52px;
+  height: 72px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  border: 2px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  position: relative;
+  transition: transform 0.15s, border-color 0.15s;
+  flex: 0 0 auto;
+}
+.silver-card-faceup {
+  background: linear-gradient(180deg, #f1f5f9, #cbd5e1);
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+.silver-card-peeked {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.silver-card-back {
+  background:
+    repeating-linear-gradient(45deg, #1e293b 0 6px, #273449 6px 12px);
+  color: transparent;
+  border-color: #475569;
+}
+.silver-card-mine {
+  /* slight emphasis */
+}
+.silver-card-clickable {
+  cursor: pointer;
+}
+.silver-card-clickable:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+.silver-card-picked {
+  border-color: var(--green);
+  transform: translateY(-3px);
+}
+.silver-card-value {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+}
+.silver-card-name {
+  font-size: 9px;
+  font-weight: 600;
+  margin-top: 2px;
+  text-align: center;
+  line-height: 1.05;
+  padding: 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.silver-status {
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 16px;
+  text-align: center;
+}
+.silver-actions-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.silver-actions-area button {
+  padding: 12px;
+  font-size: 15px;
+}
+.silver-drawn-panel {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: bounceIn 0.4s ease-out;
+}
+.silver-drawn-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.silver-card-drawn {
+  width: 64px;
+  height: 88px;
+}
+.silver-card-drawn .silver-card-value { font-size: 26px; }
+.silver-card-drawn .silver-card-name { font-size: 11px; }
+.silver-drawn-buttons {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.silver-drawn-buttons button {
+  flex: 1;
+}
+.silver-ability-prompt {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.silver-ability-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.silver-ability-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.silver-bottom {
+  margin-top: auto;
+}
 
 .code-display {
   font-size: 64px;

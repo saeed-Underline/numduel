@@ -31,6 +31,10 @@
         <strong>Higher or Lower</strong>
         <small>Each guess gets a higher / lower hint until someone hits the number.</small>
       </button>
+      <button class="game-card" data-game="silver">
+        <strong>Silver</strong>
+        <small>Up to 4 players. Game logic coming soon.</small>
+      </button>
     </div>
   </section>
 
@@ -46,11 +50,24 @@
     </div>
   </section>
 
+  <section class="screen" data-screen="players-pick" hidden>
+    <h2 id="players-pick-title">How many players?</h2>
+    <p class="hint" id="players-pick-hint">Pick 2, 3, or 4. Game starts once everyone joins.</p>
+    <div class="players-options digits-options">
+      <button class="primary" data-players="2">2 players</button>
+      <button class="primary" data-players="3">3 players</button>
+      <button class="primary" data-players="4">4 players</button>
+    </div>
+    <p class="status"></p>
+    <button class="secondary" data-action="back-to-game-menu">Leave</button>
+  </section>
+
   <section class="screen" data-screen="hosting" hidden>
     <h2>Share this code</h2>
     <div class="code-display" id="room-code">····</div>
     <p class="hint">Have your opponent tap "Join Game" and enter this code.</p>
     <p class="status" id="host-status">Connecting…</p>
+    <ul class="roster" id="host-roster"></ul>
     <button class="secondary" data-action="back-to-game-menu">Cancel</button>
   </section>
 
@@ -59,6 +76,10 @@
     <input class="code-input" id="join-code" maxlength="4" autocomplete="off" autocapitalize="characters" inputmode="text" placeholder="ABCD">
     <button class="primary" id="btn-connect">Connect</button>
     <p class="status" id="join-status"></p>
+    <div class="lobby" id="join-lobby" hidden>
+      <p class="status" id="guest-lobby-status"></p>
+      <ul class="roster" id="guest-roster"></ul>
+    </div>
     <button class="secondary" data-action="back-to-game-menu">Back</button>
   </section>
 
@@ -128,6 +149,39 @@
         <h3>Their guesses</h3>
         <ul id="hilo-their-guesses"></ul>
       </div>
+    </div>
+  </section>
+
+  <section class="screen silver-screen" data-screen="game-silver" hidden>
+    <header class="silver-header">
+      <span class="silver-round" id="silver-round-label">Round 1 / 4</span>
+      <span class="turn-indicator" id="silver-turn-indicator">Your turn</span>
+    </header>
+
+    <div class="silver-piles">
+      <div class="silver-pile">
+        <span class="silver-pile-label">Deck</span>
+        <span class="silver-pile-count" id="silver-deck-count">--</span>
+      </div>
+      <div class="silver-pile">
+        <span class="silver-pile-label">Discard</span>
+        <span class="silver-pile-top" id="silver-discard-top">—</span>
+      </div>
+    </div>
+
+    <div class="silver-others" id="silver-others"></div>
+
+    <div class="silver-self">
+      <div class="silver-self-name" id="silver-self-name">Your village</div>
+      <div class="silver-village silver-village-self" id="silver-village-self"></div>
+    </div>
+
+    <p class="silver-status" id="silver-status"></p>
+
+    <div class="silver-actions-area" id="silver-actions-area"></div>
+
+    <div class="silver-bottom">
+      <button class="secondary" data-action="back-to-game-menu">Leave</button>
     </div>
   </section>
 
