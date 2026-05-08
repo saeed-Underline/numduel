@@ -11,6 +11,7 @@
   --green: #22c55e;
   --yellow: #eab308;
   --red: #ef4444;
+  --purple: #a855f7;
   --border: #334155;
 }
 
@@ -100,7 +101,7 @@ button {
   border: none;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.15s, transform 0.1s;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s;
 }
 button:active { transform: scale(0.98); }
 
@@ -122,6 +123,53 @@ button.secondary {
 }
 button.secondary:hover { background: var(--surface); }
 
+/* ---- Main menu (game list) ---- */
+.game-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+}
+.game-card {
+  width: 100%;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  animation: cardIn 0.4s ease-out backwards;
+}
+.game-card:nth-child(1) { animation-delay: 0.05s; }
+.game-card:nth-child(2) { animation-delay: 0.15s; }
+.game-card:hover { background: var(--surface-2); border-color: var(--accent); }
+.game-card:active { transform: scale(0.98); }
+.game-card strong {
+  font-size: 18px;
+  font-weight: 700;
+}
+.game-card small {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* ---- Digits picker ---- */
+.digits-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.digits-options[hidden] { display: none; }
+
 .code-display {
   font-size: 64px;
   font-weight: 800;
@@ -131,7 +179,7 @@ button.secondary:hover { background: var(--surface); }
   background: var(--surface);
   border-radius: 16px;
   font-family: "SF Mono", "Monaco", "Consolas", monospace;
-  text-indent: 0.25em; /* visually centers letter-spaced text */
+  text-indent: 0.25em;
 }
 
 .code-input,
@@ -156,7 +204,7 @@ button.secondary:hover { background: var(--surface); }
   border-color: var(--accent);
 }
 
-/* ---- Game screen ---- */
+/* ---- Game screen (shared header & history) ---- */
 .game-header {
   display: flex;
   justify-content: space-between;
@@ -226,6 +274,7 @@ button.secondary:hover { background: var(--surface); }
   padding-right: 2px;
 }
 
+/* ---- Guess 4 Digit cells ---- */
 .guess-row {
   display: flex;
   gap: 4px;
@@ -253,6 +302,40 @@ button.secondary:hover { background: var(--surface); }
 .guess-cell.yellow { background: var(--yellow); color: #1f1f1f; }
 .guess-cell.red    { background: var(--red); }
 
+/* ---- Higher or Lower rows ---- */
+.hilo-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  animation: slideInLeft 0.3s ease-out;
+}
+.hilo-digits {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  letter-spacing: 0.1em;
+}
+.hilo-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.hilo-hint.higher  { color: var(--green); }
+.hilo-hint.lower   { color: var(--yellow); }
+.hilo-hint.correct { color: var(--accent); }
+.hilo-arrow {
+  font-size: 18px;
+  line-height: 1;
+}
+
 /* ---- Disconnect banner ---- */
 .banner {
   background: var(--red);
@@ -266,7 +349,6 @@ button.secondary:hover { background: var(--surface); }
   border-radius: 12px;
   animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-/* Override the .banner display: flex so the [hidden] attribute actually hides it. */
 .banner[hidden] { display: none; }
 .banner button {
   width: auto;
@@ -276,14 +358,57 @@ button.secondary:hover { background: var(--surface); }
   font-size: 14px;
 }
 
+/* ---- Game over stage ---- */
+.gameover-stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.gameover-stage .hero {
+  position: relative;
+  z-index: 2;
+}
+
+.gameover-stage.won  #gameover-title { color: var(--green); animation: bounceIn 0.6s ease-out; }
+.gameover-stage.lost #gameover-title { color: var(--red);   animation: shakeIn 0.7s ease-out; }
+.gameover-stage.won  #gameover-detail { animation: fadeIn 0.5s 0.25s ease-out backwards; }
+.gameover-stage.lost #gameover-detail { animation: fadeIn 0.5s 0.5s ease-out backwards; }
+
+/* ---- Confetti (win celebration) ---- */
+.confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+.confetti-dot {
+  position: absolute;
+  top: -16px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  animation: fall linear forwards;
+}
+
 /* ---- Animations ---- */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-12px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 @keyframes flipIn {
   from { transform: rotateX(-90deg); opacity: 0.4; }
@@ -293,4 +418,26 @@ button.secondary:hover { background: var(--surface); }
   0%   { transform: scale(0.85); }
   60%  { transform: scale(1.08); }
   100% { transform: scale(1); }
+}
+@keyframes bounceIn {
+  0%   { transform: scale(0.3); opacity: 0; }
+  50%  { transform: scale(1.18); opacity: 1; }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+@keyframes shakeIn {
+  0%   { transform: translateX(0);   opacity: 0; }
+  10%  { transform: translateX(-8px); opacity: 1; }
+  20%  { transform: translateX(8px); }
+  30%  { transform: translateX(-12px); }
+  40%  { transform: translateX(12px); }
+  50%  { transform: translateX(-8px); }
+  60%  { transform: translateX(8px); }
+  70%  { transform: translateX(-4px); }
+  80%  { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+@keyframes fall {
+  0%   { transform: translateY(0)    rotate(0deg);   opacity: 1; }
+  100% { transform: translateY(120vh) rotate(720deg); opacity: 0.3; }
 }

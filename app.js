@@ -1,8 +1,6 @@
 (function () {
   'use strict';
 
-  // Namespace prefix avoids collisions with other PeerJS users on the public broker.
-  const PEER_PREFIX = 'numduel-v1-';
   // Excludes 0/1/I/O/L to avoid visual ambiguity.
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const CODE_LEN = 4;
@@ -28,11 +26,30 @@
     return new Peer();
   }
 
+  // Each game gets its own peer-ID prefix so a "Higher or Lower" code can't
+  // accidentally connect to a "Guess 4 Digit" host (and vice versa).
+  const GAMES = {
+    guess4: {
+      title: 'Guess 4 Digit',
+      tagline: "Crack your opponent's 4-digit number with color-coded feedback.",
+      peerPrefix: 'guess4-v1-',
+      fixedDigits: 4,
+    },
+    hilo: {
+      title: 'Higher or Lower',
+      tagline: 'Each guess gets a higher / lower hint until someone hits the number.',
+      peerPrefix: 'hilo-v1-',
+      fixedDigits: null,
+    },
+  };
+
   const state = {
+    game: null,           // 'guess4' | 'hilo'
     role: null,           // 'host' | 'guest'
     peer: null,
     conn: null,
     code: null,
+    digits: 4,            // active digit length (4 for guess4, host-chosen 2-4 for hilo)
     mySecret: null,
     iAmReady: false,
     opponentReady: false,
@@ -40,16 +57,14 @@
     gameOver: false,
   };
 
-  // ---------- Screen helpers ----------
+  // ---------- DOM helpers ----------
+  function $(id) { return document.getElementById(id); }
+  function setText(id, text) { $(id).textContent = text; }
   function show(name) {
     document.querySelectorAll('.screen').forEach(s => {
       s.hidden = s.dataset.screen !== name;
     });
   }
-  function setText(id, text) {
-    document.getElementById(id).textContent = text;
-  }
-  function $(id) { return document.getElementById(id); }
 
   // ---------- Code generation ----------
   function genCode() {
@@ -60,8 +75,36 @@
     return s;
   }
 
+  // ---------- Menu navigation ----------
+  function selectGame(gameId) {
+    state.game = gameId;
+    const g = GAMES[gameId];
+    setText('game-menu-title', g.title);
+    setText('game-menu-tagline', g.tagline);
+    show('game-menu');
+  }
+
+  function backToMainMenu() {
+    state.game = null;
+    quitConnection();
+    show('main-menu');
+  }
+
+  function backToGameMenu() {
+    quitConnection();
+    if (state.game) {
+      const g = GAMES[state.game];
+      setText('game-menu-title', g.title);
+      setText('game-menu-tagline', g.tagline);
+      show('game-menu');
+    } else {
+      show('main-menu');
+    }
+  }
+
   // ---------- Hosting ----------
   function host() {
+    if (!state.game) return;
     state.role = 'host';
     show('hosting');
     setText('host-status', 'Connecting…');
@@ -71,7 +114,7 @@
 
   function tryHost(retriesLeft) {
     const code = genCode();
-    const peer = newPeer(PEER_PREFIX + code);
+    const peer = newPeer(GAMES[state.game].peerPrefix + code);
 
     peer.on('open', () => {
       state.peer = peer;
@@ -99,6 +142,7 @@
 
   // ---------- Joining ----------
   function joinScreen() {
+    if (!state.game) return;
     state.role = 'guest';
     show('joining');
     setText('join-status', '');
@@ -121,7 +165,7 @@
     });
 
     peer.on('open', () => {
-      const conn = peer.connect(PEER_PREFIX + code, { reliable: true });
+      const conn = peer.connect(GAMES[state.game].peerPrefix + code, { reliable: true });
       state.conn = conn;
       conn.on('open', () => wireConnection(conn));
     });
@@ -132,30 +176,65 @@
     conn.on('data', handleMessage);
     conn.on('close', handleDisconnect);
     conn.on('error', handleDisconnect);
-    enterSetup();
+
+    if (state.game === 'hilo') {
+      enterDigitsPick(state.role === 'host');
+    } else {
+      state.digits = GAMES.guess4.fixedDigits;
+      enterSetup();
+    }
   }
 
   function send(msg) {
     if (state.conn && state.conn.open) state.conn.send(msg);
   }
 
-  // ---------- Setup phase ----------
+  // ---------- Higher or Lower: digit count picker ----------
+  function enterDigitsPick(asHost) {
+    if (asHost) {
+      setText('digits-pick-title', 'Choose number length');
+      setText('digits-pick-hint', 'How many digits should each secret number have?');
+      $('digits-options').hidden = false;
+      setText('digits-status', '');
+    } else {
+      setText('digits-pick-title', 'Connected!');
+      setText('digits-pick-hint', 'Waiting for the host to choose number length.');
+      $('digits-options').hidden = true;
+      setText('digits-status', '');
+    }
+    show('digits-pick');
+  }
+
+  function onDigitsPick(n) {
+    state.digits = n;
+    send({ type: 'digits', value: n });
+    enterSetup();
+  }
+
+  // ---------- Setup ----------
   function enterSetup() {
     state.iAmReady = false;
     state.opponentReady = false;
     state.gameOver = false;
     state.mySecret = null;
-    $('secret-input').value = '';
+
+    const placeholder = '•'.repeat(state.digits);
+    const input = $('secret-input');
+    input.value = '';
+    input.setAttribute('maxlength', String(state.digits));
+    input.setAttribute('placeholder', placeholder);
+    setText('setup-hint', state.digits + ' digits. Your opponent will try to guess this.');
     $('btn-ready').disabled = false;
     setText('setup-status', 'Enter your number and tap Ready.');
     show('setup');
-    setTimeout(() => $('secret-input').focus(), 50);
+    setTimeout(() => input.focus(), 50);
   }
 
   function onReady() {
     const v = $('secret-input').value.trim();
-    if (!/^\d{4}$/.test(v)) {
-      setText('setup-status', 'Enter exactly 4 digits.');
+    const re = new RegExp('^\\d{' + state.digits + '}$');
+    if (!re.test(v)) {
+      setText('setup-status', 'Enter exactly ' + state.digits + ' digits.');
       return;
     }
     state.mySecret = v;
@@ -172,32 +251,60 @@
 
   function maybeStart() {
     if (!(state.iAmReady && state.opponentReady)) return;
-
     // Host is the single source of truth for who goes first.
     if (state.role === 'host') {
       const firstPlayer = Math.random() < 0.5 ? 'host' : 'guest';
       send({ type: 'start', firstPlayer });
       startGame(firstPlayer === 'host');
     }
-    // Guest waits for the 'start' message.
+  }
+
+  // ---------- Per-game UI ids ----------
+  function gameIds() {
+    if (state.game === 'guess4') {
+      return {
+        screen: 'game-guess4',
+        secret: 'g4-my-secret',
+        indicator: 'g4-turn-indicator',
+        input: 'g4-guess-input',
+        btn: 'btn-g4-guess',
+        myList: 'g4-my-guesses',
+        theirList: 'g4-their-guesses',
+      };
+    }
+    return {
+      screen: 'game-hilo',
+      secret: 'hilo-my-secret',
+      indicator: 'hilo-turn-indicator',
+      input: 'hilo-guess-input',
+      btn: 'btn-hilo-guess',
+      myList: 'hilo-my-guesses',
+      theirList: 'hilo-their-guesses',
+    };
   }
 
   // ---------- Gameplay ----------
   function startGame(myTurn) {
     state.myTurn = myTurn;
     state.gameOver = false;
-    $('my-guesses').innerHTML = '';
-    $('their-guesses').innerHTML = '';
-    $('guess-input').value = '';
-    $('my-secret').textContent = state.mySecret;
-    show('game');
+
+    const ids = gameIds();
+    $(ids.myList).innerHTML = '';
+    $(ids.theirList).innerHTML = '';
+    const input = $(ids.input);
+    input.value = '';
+    input.setAttribute('maxlength', String(state.digits));
+    input.setAttribute('placeholder', '•'.repeat(state.digits));
+    $(ids.secret).textContent = state.mySecret;
+    show(ids.screen);
     updateTurnUI();
   }
 
   function updateTurnUI() {
-    const indicator = $('turn-indicator');
-    const input = $('guess-input');
-    const btn = $('btn-guess');
+    const ids = gameIds();
+    const indicator = $(ids.indicator);
+    const input = $(ids.input);
+    const btn = $(ids.btn);
     if (state.myTurn) {
       indicator.textContent = 'Your turn';
       indicator.classList.remove('waiting');
@@ -214,52 +321,55 @@
 
   function onGuess() {
     if (!state.myTurn || state.gameOver) return;
-    const v = $('guess-input').value.trim();
-    if (!/^\d{4}$/.test(v)) {
-      $('guess-input').focus();
+    const ids = gameIds();
+    const v = $(ids.input).value.trim();
+    const re = new RegExp('^\\d{' + state.digits + '}$');
+    if (!re.test(v)) {
+      $(ids.input).focus();
       return;
     }
-    $('guess-input').value = '';
+    $(ids.input).value = '';
     send({ type: 'guess', digits: v });
     state.myTurn = false;
-    $('guess-input').disabled = true;
-    $('btn-guess').disabled = true;
-    $('turn-indicator').textContent = 'Checking…';
-    $('turn-indicator').classList.add('waiting');
+    $(ids.input).disabled = true;
+    $(ids.btn).disabled = true;
+    $(ids.indicator).textContent = 'Checking…';
+    $(ids.indicator).classList.add('waiting');
   }
 
   function handleOpponentGuess(digits) {
-    const feedback = scoreGuess(digits, state.mySecret);
-    const won = feedback.every(c => c === 'green');
-
-    appendGuess('their-guesses', digits, feedback);
-    send({ type: 'result', digits, feedback, won });
-
-    if (won) {
-      state.gameOver = true;
-      endGame(false, digits);
+    if (state.game === 'guess4') {
+      const feedback = scoreGuess(digits, state.mySecret);
+      const won = feedback.every(c => c === 'green');
+      appendGuess4Row('g4-their-guesses', digits, feedback);
+      send({ type: 'result', digits, feedback, won });
+      if (won) { state.gameOver = true; endGame(false, digits); }
+      else { state.myTurn = true; updateTurnUI(); }
     } else {
-      state.myTurn = true;
-      updateTurnUI();
+      const hint = compareNumbers(digits, state.mySecret);
+      const won = hint === 'correct';
+      appendHiloRow('hilo-their-guesses', digits, hint);
+      send({ type: 'result', digits, hint, won });
+      if (won) { state.gameOver = true; endGame(false, digits); }
+      else { state.myTurn = true; updateTurnUI(); }
     }
   }
 
   function handleResult(msg) {
-    appendGuess('my-guesses', msg.digits, msg.feedback);
-    if (msg.won) {
-      state.gameOver = true;
-      endGame(true, msg.digits);
+    if (state.game === 'guess4') {
+      appendGuess4Row('g4-my-guesses', msg.digits, msg.feedback);
     } else {
-      state.myTurn = false;
-      updateTurnUI();
+      appendHiloRow('hilo-my-guesses', msg.digits, msg.hint);
     }
+    if (msg.won) { state.gameOver = true; endGame(true, msg.digits); }
+    else { state.myTurn = false; updateTurnUI(); }
   }
 
-  function appendGuess(listId, digits, feedback) {
+  function appendGuess4Row(listId, digits, feedback) {
     const ul = $(listId);
     const li = document.createElement('li');
     li.className = 'guess-row';
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < digits.length; i++) {
       const cell = document.createElement('span');
       cell.className = 'guess-cell ' + feedback[i];
       cell.textContent = digits[i];
@@ -269,39 +379,95 @@
     li.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
 
-  // Wordle-style feedback: greens first, then yellows that consume unmatched secret digits.
-  function scoreGuess(guess, secret) {
-    const result = ['red', 'red', 'red', 'red'];
-    const used = [false, false, false, false];
+  function appendHiloRow(listId, digits, hint) {
+    const ul = $(listId);
+    const li = document.createElement('li');
+    li.className = 'hilo-row';
 
-    for (let i = 0; i < 4; i++) {
-      if (guess[i] === secret[i]) {
-        result[i] = 'green';
-        used[i] = true;
-      }
+    const num = document.createElement('span');
+    num.className = 'hilo-digits';
+    num.textContent = digits;
+    li.appendChild(num);
+
+    const tag = document.createElement('span');
+    tag.className = 'hilo-hint ' + hint;
+    if (hint === 'higher') {
+      tag.innerHTML = '<span class="hilo-arrow">↑</span> Higher';
+    } else if (hint === 'lower') {
+      tag.innerHTML = '<span class="hilo-arrow">↓</span> Lower';
+    } else {
+      tag.textContent = 'Correct!';
     }
-    for (let i = 0; i < 4; i++) {
+    li.appendChild(tag);
+
+    ul.appendChild(li);
+    li.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+
+  // Wordle-style: greens first, then yellows that consume unmatched secret digits.
+  function scoreGuess(guess, secret) {
+    const len = guess.length;
+    const result = new Array(len).fill('red');
+    const used = new Array(len).fill(false);
+    for (let i = 0; i < len; i++) {
+      if (guess[i] === secret[i]) { result[i] = 'green'; used[i] = true; }
+    }
+    for (let i = 0; i < len; i++) {
       if (result[i] === 'green') continue;
-      for (let j = 0; j < 4; j++) {
-        if (!used[j] && guess[i] === secret[j]) {
-          result[i] = 'yellow';
-          used[j] = true;
-          break;
-        }
+      for (let j = 0; j < len; j++) {
+        if (!used[j] && guess[i] === secret[j]) { result[i] = 'yellow'; used[j] = true; break; }
       }
     }
     return result;
   }
 
+  // 'higher' = secret > guess (player should guess higher), 'lower' = secret < guess, 'correct' = match.
+  function compareNumbers(guess, secret) {
+    const g = parseInt(guess, 10);
+    const s = parseInt(secret, 10);
+    if (g === s) return 'correct';
+    return s > g ? 'higher' : 'lower';
+  }
+
+  // ---------- Game over ----------
   function endGame(iWon, finalDigits) {
     show('gameover');
-    if (iWon) {
-      setText('gameover-title', 'You won!');
-      setText('gameover-detail', 'You cracked their number: ' + finalDigits);
-    } else {
-      setText('gameover-title', 'You lost');
-      setText('gameover-detail', 'They guessed your number (' + state.mySecret + ') with ' + finalDigits);
+    const stage = $('gameover-stage');
+    stage.classList.remove('won', 'lost');
+    // Force reflow so the animation re-runs even if the same class is re-added later.
+    void stage.offsetWidth;
+    stage.classList.add(iWon ? 'won' : 'lost');
+
+    setText('gameover-title', iWon ? 'You won!' : 'You lost');
+    setText('gameover-detail', iWon
+      ? 'You cracked their number: ' + finalDigits
+      : 'They guessed your number (' + state.mySecret + ') with ' + finalDigits);
+
+    if (iWon) showConfetti();
+    else clearConfetti();
+  }
+
+  function showConfetti() {
+    const c = $('confetti');
+    c.innerHTML = '';
+    const colors = ['#22c55e', '#3b82f6', '#eab308', '#ef4444', '#a855f7'];
+    const count = 28;
+    for (let i = 0; i < count; i++) {
+      const dot = document.createElement('span');
+      dot.className = 'confetti-dot';
+      dot.style.left = (Math.random() * 100) + '%';
+      dot.style.background = colors[i % colors.length];
+      dot.style.animationDelay = (Math.random() * 0.4).toFixed(2) + 's';
+      dot.style.animationDuration = (1.4 + Math.random() * 0.9).toFixed(2) + 's';
+      const size = 6 + Math.floor(Math.random() * 6);
+      dot.style.width = size + 'px';
+      dot.style.height = size + 'px';
+      c.appendChild(dot);
     }
+  }
+
+  function clearConfetti() {
+    $('confetti').innerHTML = '';
   }
 
   function onRematch() {
@@ -310,22 +476,25 @@
     setText('setup-status', 'Rematch! Pick a new number and tap Ready.');
   }
 
-  function quit() {
-    // Clear state BEFORE destroying the peer, so the close events that fire
-    // during destroy() see a cleaned-up state and don't re-show the banner.
+  // ---------- Connection lifecycle ----------
+  function quitConnection() {
+    // Clear state BEFORE destroying the peer, so close events fired during destroy()
+    // see a cleaned-up state and don't re-show the disconnect banner.
     const peer = state.peer;
     state.peer = null;
     state.conn = null;
     state.role = null;
     state.gameOver = false;
+    state.iAmReady = false;
+    state.opponentReady = false;
     $('disconnect-banner').hidden = true;
-    show('menu');
+    clearConfetti();
     if (peer) { try { peer.destroy(); } catch (_) {} }
   }
 
   function handleDisconnect() {
     if (state.gameOver) return;
-    if (!state.peer) return; // we've already left intentionally
+    if (!state.peer) return;
     $('disconnect-banner').hidden = false;
   }
 
@@ -333,13 +502,14 @@
   function handleMessage(msg) {
     if (!msg || typeof msg !== 'object') return;
     switch (msg.type) {
+      case 'digits':
+        state.digits = msg.value;
+        enterSetup();
+        break;
       case 'ready':
         state.opponentReady = true;
-        if (state.iAmReady) {
-          maybeStart();
-        } else {
-          setText('setup-status', 'Opponent is ready. Waiting for you…');
-        }
+        if (state.iAmReady) maybeStart();
+        else setText('setup-status', 'Opponent is ready. Waiting for you…');
         break;
       case 'start':
         startGame(msg.firstPlayer === state.role);
@@ -351,7 +521,7 @@
         handleResult(msg);
         break;
       case 'rematch':
-        if (state.gameOver || document.querySelector('.screen[data-screen="gameover"]:not([hidden])')) {
+        if (state.gameOver) {
           enterSetup();
           setText('setup-status', 'Opponent wants a rematch. Pick your number.');
         }
@@ -360,6 +530,12 @@
   }
 
   // ---------- Wire up UI ----------
+  document.querySelectorAll('.game-card').forEach(b =>
+    b.addEventListener('click', () => selectGame(b.dataset.game)));
+
+  document.querySelectorAll('.digits-options [data-digits]').forEach(b =>
+    b.addEventListener('click', () => onDigitsPick(parseInt(b.dataset.digits, 10))));
+
   $('btn-host').addEventListener('click', host);
   $('btn-join').addEventListener('click', joinScreen);
   $('btn-connect').addEventListener('click', () => {
@@ -371,16 +547,15 @@
     connectTo(v);
   });
   $('btn-ready').addEventListener('click', onReady);
-  $('btn-guess').addEventListener('click', onGuess);
+  $('btn-g4-guess').addEventListener('click', onGuess);
+  $('btn-hilo-guess').addEventListener('click', onGuess);
   $('btn-rematch').addEventListener('click', onRematch);
-  $('btn-quit').addEventListener('click', quit);
+  $('btn-quit').addEventListener('click', backToGameMenu);
 
-  document.querySelectorAll('[data-action="back-to-menu"]').forEach(b =>
-    b.addEventListener('click', () => {
-      $('disconnect-banner').hidden = true;
-      quit();
-    })
-  );
+  document.querySelectorAll('[data-action="back-to-game-menu"]').forEach(b =>
+    b.addEventListener('click', backToGameMenu));
+  document.querySelectorAll('[data-action="back-to-main-menu"]').forEach(b =>
+    b.addEventListener('click', backToMainMenu));
 
   // Submit on Enter
   $('join-code').addEventListener('keydown', e => {
@@ -389,21 +564,25 @@
   $('secret-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') $('btn-ready').click();
   });
-  $('guess-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') $('btn-guess').click();
+  $('g4-guess-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') $('btn-g4-guess').click();
+  });
+  $('hilo-guess-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') $('btn-hilo-guess').click();
   });
 
-  // Restrict digit inputs to numeric characters
-  ['secret-input', 'guess-input'].forEach(id => {
+  // Restrict digit inputs to numerics, capped at the active digit count.
+  ['secret-input', 'g4-guess-input', 'hilo-guess-input'].forEach(id => {
     $(id).addEventListener('input', (e) => {
-      e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+      const max = state.digits || 4;
+      e.target.value = e.target.value.replace(/\D/g, '').slice(0, max);
     });
   });
 
-  // Uppercase + filter the room code as the user types
+  // Uppercase + filter the room code as the user types.
   $('join-code').addEventListener('input', (e) => {
     e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, CODE_LEN);
   });
 
-  show('menu');
+  show('main-menu');
 })();
