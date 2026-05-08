@@ -475,6 +475,19 @@ button.secondary:hover { background: var(--surface); }
   text-indent: 0.25em;
 }
 
+.code-buttons {
+  display: flex;
+  gap: 8px;
+}
+.code-button {
+  flex: 1;
+}
+.code-button.copy-feedback {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+
 .code-input,
 .digit-input {
   width: 100%;

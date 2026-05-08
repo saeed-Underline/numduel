@@ -133,6 +133,84 @@
     return s;
   }
 
+  // ---------- Share / copy helpers ----------
+  function buildShareUrl(game, code) {
+    // Reuse the current page URL but replace its query string with game+code so a
+    // friend tapping the link lands on the join screen with everything pre-filled.
+    const url = new URL(location.href);
+    url.search = '';
+    url.hash = '';
+    url.searchParams.set('game', game);
+    url.searchParams.set('code', code);
+    return url.toString();
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    // Fallback for non-secure contexts (file://, plain http on a LAN).
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) {}
+    document.body.removeChild(ta);
+    return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+  }
+
+  function flashCopyFeedback(btn, label) {
+    if (!btn) return;
+    if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent;
+    btn.textContent = label;
+    btn.classList.add('copy-feedback');
+    clearTimeout(btn._feedbackTimer);
+    btn._feedbackTimer = setTimeout(() => {
+      btn.textContent = btn.dataset.originalText;
+      btn.classList.remove('copy-feedback');
+    }, 1500);
+  }
+
+  function onCopyCode() {
+    const code = state.code;
+    if (!code || !state.game) return;
+    const url = buildShareUrl(state.game, code);
+    copyToClipboard(url)
+      .then(() => flashCopyFeedback($('btn-copy-code'), 'Copied!'))
+      .catch(() => flashCopyFeedback($('btn-copy-code'), 'Copy failed'));
+  }
+
+  function onShareCode() {
+    const code = state.code;
+    if (!code || !state.game) return;
+    const url = buildShareUrl(state.game, code);
+    const game = GAMES[state.game];
+    const shareData = {
+      title: 'Join my ' + game.title + ' game',
+      text: 'Join my ' + game.title + ' game with code ' + code,
+      url: url,
+    };
+    if (navigator.share) {
+      navigator.share(shareData).catch(() => { /* user cancelled or unsupported */ });
+    } else {
+      // Desktop browsers without Web Share: copy the link instead.
+      copyToClipboard(url)
+        .then(() => flashCopyFeedback($('btn-share-code'), 'Link copied!'))
+        .catch(() => flashCopyFeedback($('btn-share-code'), 'Copy failed'));
+    }
+  }
+
+  function setCodeButtonsEnabled(enabled) {
+    const c = $('btn-copy-code');
+    const s = $('btn-share-code');
+    if (c) c.disabled = !enabled;
+    if (s) s.disabled = !enabled;
+  }
+
   // ---------- Menu navigation ----------
   function selectGame(gameId) {
     state.game = gameId;
@@ -171,6 +249,7 @@
       show('hosting');
       setText('host-status', 'Connecting…');
       $('room-code').textContent = '····';
+      setCodeButtonsEnabled(false);
       tryHost(5);
     }
   }
@@ -183,6 +262,7 @@
       state.peer = peer;
       state.code = code;
       $('room-code').textContent = code;
+      setCodeButtonsEnabled(true);
       if (isMultiPlayer()) {
         updateHostingLobby();
       } else {
@@ -334,6 +414,7 @@
     state.conns = new Map();
     show('hosting');
     $('room-code').textContent = '····';
+    setCodeButtonsEnabled(false);
     setText('host-status', 'Connecting…');
     tryHost(5);
   }
@@ -1602,6 +1683,8 @@
 
   $('btn-host').addEventListener('click', host);
   $('btn-join').addEventListener('click', joinScreen);
+  $('btn-copy-code').addEventListener('click', onCopyCode);
+  $('btn-share-code').addEventListener('click', onShareCode);
   $('btn-connect').addEventListener('click', () => {
     const v = $('join-code').value.trim().toUpperCase();
     if (v.length !== CODE_LEN) {
@@ -1645,5 +1728,28 @@
     e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, CODE_LEN);
   });
 
-  show('main-menu');
+  // ---------- Deep link: ?game=<id>&code=<code> drops the user straight into Join ----------
+  function tryAutoJoinFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const game = params.get('game');
+    const codeRaw = params.get('code');
+    if (!game || !codeRaw || !GAMES[game]) return false;
+    const code = codeRaw.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, CODE_LEN);
+    if (code.length !== CODE_LEN) return false;
+    // Clean the URL so a refresh later doesn't re-trigger the auto-join.
+    history.replaceState({}, '', location.pathname);
+    state.game = game;
+    state.role = 'guest';
+    setText('game-menu-title', GAMES[game].title);
+    setText('game-menu-tagline', GAMES[game].tagline);
+    show('joining');
+    setText('join-status', 'Connecting to ' + GAMES[game].title + ' (' + code + ')…');
+    $('join-code').value = code;
+    setTimeout(() => connectTo(code), 400);
+    return true;
+  }
+
+  if (!tryAutoJoinFromUrl()) {
+    show('main-menu');
+  }
 })();

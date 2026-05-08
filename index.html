@@ -65,7 +65,11 @@
   <section class="screen" data-screen="hosting" hidden>
     <h2>Share this code</h2>
     <div class="code-display" id="room-code">····</div>
-    <p class="hint">Have your opponent tap "Join Game" and enter this code.</p>
+    <div class="code-buttons">
+      <button class="secondary code-button" id="btn-copy-code" disabled>Copy link</button>
+      <button class="secondary code-button" id="btn-share-code" disabled>Share</button>
+    </div>
+    <p class="hint">Have your friend tap "Join Game" and enter this code, or send them the share link.</p>
     <p class="status" id="host-status">Connecting…</p>
     <ul class="roster" id="host-roster"></ul>
     <button class="secondary" data-action="back-to-game-menu">Cancel</button>
