@@ -26,35 +26,50 @@
     return new Peer();
   }
 
-  // Each game gets its own peer-ID prefix so a "Higher or Lower" code can't
-  // accidentally connect to a "Guess 4 Digit" host (and vice versa).
+  // Each game gets its own peer-ID prefix so a code from one game can't accidentally
+  // connect to a host of another. minPlayers/maxPlayers: 2/2 means a 1-on-1 game
+  // (existing path); maxPlayers > 2 takes the Silver-style lobby path.
   const GAMES = {
     guess4: {
       title: 'Guess 4 Digit',
       tagline: "Crack your opponent's 4-digit number with color-coded feedback.",
       peerPrefix: 'guess4-v1-',
       fixedDigits: 4,
+      minPlayers: 2,
+      maxPlayers: 2,
     },
     hilo: {
       title: 'Higher or Lower',
       tagline: 'Each guess gets a higher / lower hint until someone hits the number.',
       peerPrefix: 'hilo-v1-',
       fixedDigits: null,
+      minPlayers: 2,
+      maxPlayers: 2,
+    },
+    silver: {
+      title: 'Silver',
+      tagline: 'Up to four players. Game logic coming soon.',
+      peerPrefix: 'silver-v1-',
+      minPlayers: 2,
+      maxPlayers: 4,
     },
   };
 
   const state = {
-    game: null,           // 'guess4' | 'hilo'
+    game: null,           // 'guess4' | 'hilo' | 'silver'
     role: null,           // 'host' | 'guest'
     peer: null,
-    conn: null,
+    conn: null,           // guest's connection to host (single-conn path)
+    conns: new Map(),     // host: peerId -> DataConnection (multi-player path)
     code: null,
-    digits: 4,            // active digit length (4 for guess4, host-chosen 2-4 for hilo)
+    digits: 4,            // Guess 4 / Higher-or-Lower digit length
     mySecret: null,
     iAmReady: false,
     opponentReady: false,
     myTurn: false,
     gameOver: false,
+    playerCount: 2,       // host's chosen N for Silver
+    players: [],          // [{id, name, isHost}]; host populates, broadcasts, guest mirrors
   };
 
   // ---------- DOM helpers ----------
@@ -64,6 +79,9 @@
     document.querySelectorAll('.screen').forEach(s => {
       s.hidden = s.dataset.screen !== name;
     });
+  }
+  function isMultiPlayer() {
+    return !!(state.game && GAMES[state.game].maxPlayers > 2);
   }
 
   // ---------- Code generation ----------
@@ -106,10 +124,14 @@
   function host() {
     if (!state.game) return;
     state.role = 'host';
-    show('hosting');
-    setText('host-status', 'Connecting…');
-    $('room-code').textContent = '····';
-    tryHost(5);
+    if (isMultiPlayer()) {
+      enterPlayersPick();
+    } else {
+      show('hosting');
+      setText('host-status', 'Connecting…');
+      $('room-code').textContent = '····';
+      tryHost(5);
+    }
   }
 
   function tryHost(retriesLeft) {
@@ -120,12 +142,22 @@
       state.peer = peer;
       state.code = code;
       $('room-code').textContent = code;
-      setText('host-status', 'Waiting for opponent…');
+      if (isMultiPlayer()) {
+        updateHostingLobby();
+      } else {
+        setText('host-status', 'Waiting for opponent…');
+      }
     });
 
     peer.on('connection', (conn) => {
-      state.conn = conn;
-      conn.on('open', () => wireConnection(conn));
+      conn.on('open', () => {
+        if (isMultiPlayer()) {
+          onMultiPlayerGuestJoined(conn);
+        } else {
+          state.conn = conn;
+          wireConnection(conn);
+        }
+      });
     });
 
     peer.on('error', (err) => {
@@ -172,12 +204,18 @@
   }
 
   // ---------- Connection wiring ----------
+  // Used by both:
+  //   - Single-conn games (guest's connection to host, OR host's connection to its one guest)
+  //   - Silver guests' connection to the host (host side uses onMultiPlayerGuestJoined instead)
   function wireConnection(conn) {
     conn.on('data', handleMessage);
     conn.on('close', handleDisconnect);
     conn.on('error', handleDisconnect);
 
-    if (state.game === 'hilo') {
+    if (state.game === 'silver') {
+      // Silver guest enters the lobby waiting state; transitions when host broadcasts 'start'.
+      enterGuestLobby();
+    } else if (state.game === 'hilo') {
       enterDigitsPick(state.role === 'host');
     } else {
       state.digits = GAMES.guess4.fixedDigits;
@@ -187,6 +225,120 @@
 
   function send(msg) {
     if (state.conn && state.conn.open) state.conn.send(msg);
+  }
+
+  // Host: send to all guests. Guest: send to host. (Silver / multi-player.)
+  function broadcast(msg) {
+    if (state.role === 'host') {
+      for (const conn of state.conns.values()) {
+        if (conn.open) conn.send(msg);
+      }
+    } else if (state.conn && state.conn.open) {
+      state.conn.send(msg);
+    }
+  }
+
+  // ---------- Multi-player host: lobby management ----------
+  function onMultiPlayerGuestJoined(conn) {
+    state.conns.set(conn.peer, conn);
+    conn.on('data', (msg) => handleHostInboundMessage(conn.peer, msg));
+    conn.on('close', () => onGuestLeft(conn.peer));
+    conn.on('error', () => onGuestLeft(conn.peer));
+
+    const slot = state.players.length + 1;
+    state.players.push({ id: conn.peer, name: 'Player ' + slot, isHost: false });
+
+    broadcast({ type: 'lobby', players: state.players, playerCount: state.playerCount });
+    updateHostingLobby();
+
+    if (state.players.length === state.playerCount) {
+      broadcast({ type: 'start', players: state.players });
+      enterSilverPlaceholder();
+    }
+  }
+
+  function onGuestLeft(peerId) {
+    if (!state.conns.has(peerId)) return;
+    state.conns.delete(peerId);
+    state.players = state.players.filter(p => p.id !== peerId);
+    // Renumber remaining guests so slots stay 1..N.
+    let slot = 1;
+    state.players = state.players.map(p => ({ ...p, name: 'Player ' + (slot++) }));
+    broadcast({ type: 'lobby', players: state.players, playerCount: state.playerCount });
+    broadcast({ type: 'player-left', id: peerId });
+    updateHostingLobby();
+    updateSilverRoster();
+  }
+
+  // ---------- Players-pick (Silver host) ----------
+  function enterPlayersPick() {
+    setText('players-pick-title', 'How many players?');
+    setText('players-pick-hint', 'Pick 2, 3, or 4. Game starts once everyone joins.');
+    show('players-pick');
+  }
+
+  function onPlayersPick(n) {
+    state.playerCount = n;
+    state.players = [{ id: 'host', name: 'Player 1', isHost: true }];
+    state.conns = new Map();
+    show('hosting');
+    $('room-code').textContent = '····';
+    setText('host-status', 'Connecting…');
+    tryHost(5);
+  }
+
+  // Host's hosting screen status + roster.
+  function updateHostingLobby() {
+    if (!isMultiPlayer()) return;
+    const joined = state.players.length;
+    const need = state.playerCount;
+    if (joined < need) {
+      setText('host-status', 'Player ' + joined + ' of ' + need + ' joined. Waiting for ' + (need - joined) + ' more…');
+    } else {
+      setText('host-status', 'All players joined. Starting…');
+    }
+    renderRoster('host-roster', state.players);
+  }
+
+  // ---------- Multi-player guest: lobby ----------
+  function enterGuestLobby() {
+    setText('join-status', 'Connected. Waiting for host…');
+    // Note: stays on `joining` screen; the lobby element below the input is shown via JS.
+    $('join-lobby').hidden = false;
+    renderRoster('guest-roster', state.players);
+    setText('guest-lobby-status', state.players.length
+      ? state.players.length + ' / ' + (state.playerCount || '?') + ' players'
+      : 'Connecting to lobby…');
+    // Hide the connect form now that we're connected.
+    $('join-code').disabled = true;
+    $('btn-connect').disabled = true;
+  }
+
+  function updateGuestLobby() {
+    if (state.game !== 'silver') return;
+    renderRoster('guest-roster', state.players);
+    setText('guest-lobby-status', state.players.length + ' / ' + (state.playerCount || '?') + ' players');
+  }
+
+  function renderRoster(listId, players) {
+    const ul = $(listId);
+    if (!ul) return;
+    ul.innerHTML = '';
+    players.forEach((p) => {
+      const li = document.createElement('li');
+      li.className = 'roster-row';
+      const name = document.createElement('span');
+      name.className = 'roster-name';
+      name.textContent = p.name;
+      li.appendChild(name);
+      if (p.isHost) {
+        const tag = document.createElement('span');
+        tag.className = 'roster-tag';
+        tag.textContent = 'Host';
+        li.appendChild(tag);
+      }
+      ul.appendChild(li);
+    });
   }
 
   // ---------- Higher or Lower: digit count picker ----------
@@ -211,7 +363,7 @@
     enterSetup();
   }
 
-  // ---------- Setup ----------
+  // ---------- Setup (Guess 4 / Higher or Lower) ----------
   function enterSetup() {
     state.iAmReady = false;
     state.opponentReady = false;
@@ -251,7 +403,6 @@
 
   function maybeStart() {
     if (!(state.iAmReady && state.opponentReady)) return;
-    // Host is the single source of truth for who goes first.
     if (state.role === 'host') {
       const firstPlayer = Math.random() < 0.5 ? 'host' : 'guest';
       send({ type: 'start', firstPlayer });
@@ -283,7 +434,7 @@
     };
   }
 
-  // ---------- Gameplay ----------
+  // ---------- Gameplay (Guess 4 / Higher or Lower) ----------
   function startGame(myTurn) {
     state.myTurn = myTurn;
     state.gameOver = false;
@@ -421,7 +572,6 @@
     return result;
   }
 
-  // 'higher' = secret > guess (player should guess higher), 'lower' = secret < guess, 'correct' = match.
   function compareNumbers(guess, secret) {
     const g = parseInt(guess, 10);
     const s = parseInt(secret, 10);
@@ -429,12 +579,22 @@
     return s > g ? 'higher' : 'lower';
   }
 
-  // ---------- Game over ----------
+  // ---------- Silver placeholder ----------
+  function enterSilverPlaceholder() {
+    show('game-silver');
+    updateSilverRoster();
+  }
+
+  function updateSilverRoster() {
+    if (state.game !== 'silver') return;
+    renderRoster('silver-roster', state.players);
+  }
+
+  // ---------- Game over (Guess 4 / Higher or Lower) ----------
   function endGame(iWon, finalDigits) {
     show('gameover');
     const stage = $('gameover-stage');
     stage.classList.remove('won', 'lost');
-    // Force reflow so the animation re-runs even if the same class is re-added later.
     void stage.offsetWidth;
     stage.classList.add(iWon ? 'won' : 'lost');
 
@@ -487,6 +647,24 @@
     state.gameOver = false;
     state.iAmReady = false;
     state.opponentReady = false;
+    state.playerCount = 2;
+    state.players = [];
+
+    if (state.conns) {
+      for (const conn of state.conns.values()) {
+        try { conn.close(); } catch (_) {}
+      }
+      state.conns.clear();
+    }
+
+    // Reset the join screen's lobby UI in case we left mid-Silver-lobby.
+    const joinLobby = $('join-lobby');
+    if (joinLobby) joinLobby.hidden = true;
+    const joinCode = $('join-code');
+    if (joinCode) joinCode.disabled = false;
+    const btnConnect = $('btn-connect');
+    if (btnConnect) btnConnect.disabled = false;
+
     $('disconnect-banner').hidden = true;
     clearConfetti();
     if (peer) { try { peer.destroy(); } catch (_) {} }
@@ -498,10 +676,30 @@
     $('disconnect-banner').hidden = false;
   }
 
-  // ---------- Message router ----------
+  // ---------- Message routers ----------
+  // Host receives messages from individual guests (Silver). Phase 1: nothing
+  // game-specific yet — guests don't send actionable messages during the lobby.
+  function handleHostInboundMessage(fromId, msg) {
+    if (!msg || typeof msg !== 'object') return;
+    // Phase 2 (Silver gameplay) will dispatch on msg.type here and may relay
+    // via broadcast({ ...msg, from: fromId }).
+  }
+
+  // Guest's main router (and the existing 1-on-1 router for Guess 4 / Higher or Lower).
   function handleMessage(msg) {
     if (!msg || typeof msg !== 'object') return;
     switch (msg.type) {
+      // ---- Multi-player (Silver) lobby messages, guest-side ----
+      case 'lobby':
+        state.players = msg.players || [];
+        state.playerCount = msg.playerCount || state.playerCount;
+        updateGuestLobby();
+        break;
+      case 'player-left':
+        // Roster already arrives via the matching 'lobby' broadcast; nothing extra to do for v1.
+        break;
+
+      // ---- 1-on-1 game messages (Guess 4 / Higher or Lower) ----
       case 'digits':
         state.digits = msg.value;
         enterSetup();
@@ -512,7 +710,12 @@
         else setText('setup-status', 'Opponent is ready. Waiting for you…');
         break;
       case 'start':
-        startGame(msg.firstPlayer === state.role);
+        if (state.game === 'silver') {
+          state.players = msg.players || state.players;
+          enterSilverPlaceholder();
+        } else {
+          startGame(msg.firstPlayer === state.role);
+        }
         break;
       case 'guess':
         handleOpponentGuess(msg.digits);
@@ -535,6 +738,9 @@
 
   document.querySelectorAll('.digits-options [data-digits]').forEach(b =>
     b.addEventListener('click', () => onDigitsPick(parseInt(b.dataset.digits, 10))));
+
+  document.querySelectorAll('.players-options [data-players]').forEach(b =>
+    b.addEventListener('click', () => onPlayersPick(parseInt(b.dataset.players, 10))));
 
   $('btn-host').addEventListener('click', host);
   $('btn-join').addEventListener('click', joinScreen);
