@@ -152,14 +152,37 @@
     </div>
   </section>
 
-  <section class="screen" data-screen="game-silver" hidden>
-    <div class="hero">
-      <h1>Silver</h1>
-      <p class="tagline">All players have joined. Game logic coming soon.</p>
+  <section class="screen silver-screen" data-screen="game-silver" hidden>
+    <header class="silver-header">
+      <span class="silver-round" id="silver-round-label">Round 1 / 4</span>
+      <span class="turn-indicator" id="silver-turn-indicator">Your turn</span>
+    </header>
+
+    <div class="silver-piles">
+      <div class="silver-pile">
+        <span class="silver-pile-label">Deck</span>
+        <span class="silver-pile-count" id="silver-deck-count">--</span>
+      </div>
+      <div class="silver-pile">
+        <span class="silver-pile-label">Discard</span>
+        <span class="silver-pile-top" id="silver-discard-top">—</span>
+      </div>
     </div>
-    <ul class="roster" id="silver-roster"></ul>
-    <p class="hint">Phase 2 of this build will implement the rulebook actions and scoring. For now, you're connected and the lobby works end-to-end.</p>
-    <button class="secondary" data-action="back-to-game-menu">Leave</button>
+
+    <div class="silver-others" id="silver-others"></div>
+
+    <div class="silver-self">
+      <div class="silver-self-name" id="silver-self-name">Your village</div>
+      <div class="silver-village silver-village-self" id="silver-village-self"></div>
+    </div>
+
+    <p class="silver-status" id="silver-status"></p>
+
+    <div class="silver-actions-area" id="silver-actions-area"></div>
+
+    <div class="silver-bottom">
+      <button class="secondary" data-action="back-to-game-menu">Leave</button>
+    </div>
   </section>
 
   <section class="screen" data-screen="gameover" hidden>
