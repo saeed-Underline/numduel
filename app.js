@@ -5,26 +5,177 @@
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const CODE_LEN = 4;
 
-  // Broker auto-detection:
-  // - localhost / 127.0.0.1 / file:// : use the PeerJS public broker (no setup for local dev).
-  // - any other hostname: assume a self-hosted broker is reachable at /peerjs on the same origin.
-  const BROKER_OPTS = (function () {
-    const h = location.hostname;
-    if (!h || h === 'localhost' || h === '127.0.0.1') return null;
-    return {
-      host: h,
-      port: location.port ? Number(location.port) : (location.protocol === 'https:' ? 443 : 80),
-      path: '/peerjs',
-      secure: location.protocol === 'https:',
-    };
-  })();
+  // ---------- WebSocket-backed peer shim (replaces PeerJS) ----------
+  // We use a tiny relay server over wss:// to route messages between peers, so
+  // the app keeps working in networks where WebRTC traffic is blocked.
+  //
+  // The WsPeer / WsConn classes match the slice of the PeerJS API the rest of
+  // app.js relies on:
+  //   peer.on('open' | 'connection' | 'error', fn), peer.connect(otherId),
+  //   peer.id, peer.destroy()
+  //   conn.on('open' | 'data' | 'close' | 'error', fn), conn.send(msg),
+  //   conn.peer, conn.open, conn.close()
+  //
+  // The host claims a room by sending {type:'host', code}; the server assigns the
+  // host's logical id = code. A guest sends {type:'join', code} and gets back
+  // {type:'joined', id, hostId}. From then on, peer-to-peer traffic is wrapped as
+  // {type:'msg', to, payload} and the server routes by id.
 
-  function newPeer(id) {
-    if (id && BROKER_OPTS) return new Peer(id, BROKER_OPTS);
-    if (id) return new Peer(id);
-    if (BROKER_OPTS) return new Peer(BROKER_OPTS);
-    return new Peer();
+  function wsUrlForBroker() {
+    const h = location.hostname || 'localhost';
+    if (!location.hostname || h === 'localhost' || h === '127.0.0.1') {
+      // Local dev: relay listens on a separate port (configurable via window.NUMDUEL_WS).
+      const port = (window.NUMDUEL_WS_PORT) || 9001;
+      return 'ws://' + h + ':' + port + '/ws';
+    }
+    // Production: served via nginx at /ws on the same origin (auto-uses wss when the page is on https).
+    return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
   }
+
+  class WsConn {
+    constructor(peer, otherId) {
+      this._peer = peer;
+      this.peer = otherId;
+      this.open = false;
+      this._handlers = { open: [], data: [], close: [], error: [] };
+    }
+    on(event, fn) {
+      (this._handlers[event] = this._handlers[event] || []).push(fn);
+      return this;
+    }
+    _emit(event) {
+      const args = Array.prototype.slice.call(arguments, 1);
+      (this._handlers[event] || []).forEach(fn => { try { fn.apply(null, args); } catch (e) { console.error(e); } });
+    }
+    send(msg) {
+      const ws = this._peer && this._peer._ws;
+      if (ws && ws.readyState === 1 /* OPEN */) {
+        ws.send(JSON.stringify({ type: 'msg', to: this.peer, payload: msg }));
+      }
+    }
+    close() {
+      if (!this.open) return;
+      this.open = false;
+      this._peer && this._peer._conns.delete(this.peer);
+      this._emit('close');
+    }
+  }
+
+  class WsPeer {
+    constructor(id) {
+      // id !== undefined → host claiming this id as the room code.
+      // id === undefined → guest (server assigns an id on join).
+      this.id = id || null;
+      this._role = id ? 'host' : 'guest';
+      this._ws = null;
+      this._conns = new Map();
+      this._handlers = { open: [], connection: [], error: [], close: [] };
+      this._opened = false;
+      this._destroyed = false;
+      this._connect();
+    }
+    on(event, fn) {
+      (this._handlers[event] = this._handlers[event] || []).push(fn);
+      return this;
+    }
+    _emit(event) {
+      const args = Array.prototype.slice.call(arguments, 1);
+      (this._handlers[event] || []).forEach(fn => { try { fn.apply(null, args); } catch (e) { console.error(e); } });
+    }
+    _connect() {
+      let ws;
+      try { ws = new WebSocket(wsUrlForBroker()); }
+      catch (e) {
+        setTimeout(() => this._emit('error', { type: 'network', message: e.message }), 0);
+        return;
+      }
+      this._ws = ws;
+      ws.addEventListener('open', () => {
+        if (this._destroyed) { try { ws.close(); } catch (_) {} return; }
+        if (this._role === 'host') {
+          ws.send(JSON.stringify({ type: 'host', code: this.id }));
+          // peer.open fires when 'hosted' confirmation arrives.
+        } else {
+          // Guest: peer.open fires immediately so the caller can invoke peer.connect().
+          this._opened = true;
+          this._emit('open', this.id);
+        }
+      });
+      ws.addEventListener('message', (e) => this._onServerMessage(e));
+      ws.addEventListener('close', () => this._onWsClose());
+      ws.addEventListener('error', () => {
+        if (!this._opened) this._emit('error', { type: 'network', message: 'ws-open-failed' });
+      });
+    }
+    _onServerMessage(event) {
+      let msg;
+      try { msg = JSON.parse(event.data); } catch { return; }
+      if (msg.type === 'hosted') {
+        this.id = msg.id;
+        this._opened = true;
+        this._emit('open', this.id);
+      } else if (msg.type === 'joined') {
+        this.id = msg.id;
+        const conn = this._conns.get(msg.hostId);
+        if (conn) {
+          conn.open = true;
+          conn._emit('open');
+        }
+      } else if (msg.type === 'peer-joined') {
+        const conn = new WsConn(this, msg.id);
+        this._conns.set(msg.id, conn);
+        this._emit('connection', conn);
+        setTimeout(() => {
+          if (this._conns.has(msg.id)) {
+            conn.open = true;
+            conn._emit('open');
+          }
+        }, 0);
+      } else if (msg.type === 'peer-left') {
+        const conn = this._conns.get(msg.id);
+        if (conn) {
+          conn.open = false;
+          this._conns.delete(msg.id);
+          conn._emit('close');
+        }
+      } else if (msg.type === 'msg') {
+        const conn = this._conns.get(msg.from);
+        if (conn) conn._emit('data', msg.payload);
+      } else if (msg.type === 'error') {
+        this._emit('error', { type: msg.errorType || 'server-error', message: msg.reason || 'error' });
+      }
+    }
+    _onWsClose() {
+      const conns = Array.from(this._conns.values());
+      this._conns.clear();
+      conns.forEach(conn => {
+        if (conn.open) {
+          conn.open = false;
+          conn._emit('close');
+        }
+      });
+    }
+    connect(otherId /*, opts */) {
+      const conn = new WsConn(this, otherId);
+      this._conns.set(otherId, conn);
+      const doSend = () => {
+        if (this._ws && this._ws.readyState === 1) {
+          this._ws.send(JSON.stringify({ type: 'join', code: otherId }));
+        }
+      };
+      if (this._ws && this._ws.readyState === 1) doSend();
+      else if (this._ws) this._ws.addEventListener('open', doSend, { once: true });
+      return conn;
+    }
+    destroy() {
+      this._destroyed = true;
+      if (this._ws) { try { this._ws.close(); } catch (_) {} }
+      this._ws = null;
+      this._conns.clear();
+    }
+  }
+
+  function newPeer(id) { return new WsPeer(id); }
 
   // ---------- Game registry ----------
   const GAMES = {
@@ -318,10 +469,12 @@
     });
 
     peer.on('open', () => {
-      state.myId = peer.id;
       const conn = peer.connect(GAMES[state.game].peerPrefix + code, { reliable: true });
       state.conn = conn;
-      conn.on('open', () => wireConnection(conn));
+      conn.on('open', () => {
+        state.myId = peer.id;
+        wireConnection(conn);
+      });
     });
   }
 
