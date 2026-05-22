@@ -1,0 +1,18 @@
+[Unit]
+Description=Number Duel WebSocket Relay
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/numduel/server
+ExecStart=/usr/bin/node /var/www/numduel/server/server.js
+Restart=always
+RestartSec=2
+User=www-data
+Environment=PORT=9001
+Environment=HOST=127.0.0.1
+# Empty STATIC_DIR disables the dev static-file server (nginx serves the front-end in production).
+Environment=STATIC_DIR=
+
+[Install]
+WantedBy=multi-user.target
