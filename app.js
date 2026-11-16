@@ -696,7 +696,7 @@
   let silverClient = null;
 
   function silverEnsureClient() {
-    if (!silverClient) silverClient = window.SilverPvP.createClient($('silver-root'), silverDispatch);
+    if (!silverClient) silverClient = window.SilverPvP.createClient($('silver-root'), silverDispatch, { onLeave: backToGameMenu });
     return silverClient;
   }
 
