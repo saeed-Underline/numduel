@@ -89,7 +89,10 @@ function serveStatic(req, res) {
   fs.stat(filePath, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404); res.end('not found'); return; }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
+    // Always revalidate code and pages so a deploy reaches every player at once.
+    if (ext === '.html' || ext === '.js' || ext === '.css') headers['Cache-Control'] = 'no-cache';
+    res.writeHead(200, headers);
     fs.createReadStream(filePath).pipe(res);
   });
 }
@@ -127,7 +130,19 @@ wss.on('connection', (socket) => {
       if (sessions.has(socket)) return send(socket, { type: 'error', errorType: 'already-in-room', reason: 'already-in-room' });
       const code = typeof msg.code === 'string' ? msg.code.slice(0, 64) : '';
       const room = rooms.get(code);
-      if (!room) return send(socket, { type: 'error', errorType: 'peer-unavailable', reason: 'no-such-room' });
+      if (!room) {
+        // Same 4-character code hosted under another prefix? Then the guest picked a
+        // different game, or is running an older/newer cached copy of the app.
+        const suffix = code.slice(code.lastIndexOf('-') + 1);
+        let other = null;
+        if (suffix && suffix !== code) {
+          for (const key of rooms.keys()) {
+            if (key.endsWith('-' + suffix)) { other = key.slice(0, key.length - suffix.length); break; }
+          }
+        }
+        return send(socket, { type: 'error', errorType: 'peer-unavailable',
+          reason: other ? 'other-prefix:' + other : 'no-such-room' });
+      }
       const id = genGuestId();
       room.guests.set(id, socket);
       sessions.set(socket, { id, role: 'guest', code });
