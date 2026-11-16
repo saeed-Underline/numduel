@@ -396,6 +396,21 @@
     setTimeout(() => $('join-code').focus(), 50);
   }
 
+  // Explain a failed join. The relay reports when the same code is hosted under
+  // another prefix: a different game, or a different version of this app.
+  function joinErrorText(code, reason) {
+    const m = /^other-prefix:(.+)$/.exec(reason || '');
+    if (!m) return 'No game found with code ' + code + '. Check the code and that the host is still waiting.';
+    const prefix = m[1];
+    const game = Object.keys(GAMES).find(k => GAMES[k].peerPrefix === prefix);
+    if (game && game !== state.game) {
+      return 'Code ' + code + ' is for ' + GAMES[game].title + ', not ' + GAMES[state.game].title +
+        '. Go back and choose ' + GAMES[game].title + '.';
+    }
+    return 'Code ' + code + ' was created with a different version of the app. ' +
+      'Refresh this page (and the host\'s) to get the latest version, then try again.';
+  }
+
   function connectTo(code) {
     setText('join-status', 'Connecting…');
     const peer = newPeer();
@@ -404,7 +419,7 @@
 
     peer.on('error', (err) => {
       if (err.type === 'peer-unavailable') {
-        setText('join-status', 'No game found with code ' + code);
+        setText('join-status', joinErrorText(code, err.message));
       } else {
         setText('join-status', 'Error: ' + err.type);
       }
