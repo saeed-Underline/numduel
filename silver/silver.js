@@ -441,7 +441,8 @@
   }
 
   /* ================================ CLIENT (UI) ================================ */
-  function createClient(rootEl, dispatch) {
+  function createClient(rootEl, dispatch, opts) {
+    opts = opts || {};
     let view = null, sel = [], picks = [], localMode = null, uiKey = '', drag = null, dropFrom = null;
 
     rootEl.innerHTML = `
@@ -449,31 +450,43 @@
         <div class="sv-top">
           <span class="sv-round" data-r="round"></span>
           <span class="sv-turn" data-r="turn"></span>
+          <span class="sv-score" data-r="scoreChip"></span>
+          <span class="sv-spacer"></span>
+          <button class="sv-mini" data-r="scoresBtn">Scores</button>
+          <button class="sv-mini" data-r="logBtn">Log</button>
           <button class="sv-mini" data-r="rulesBtn">Rules</button>
+          <button class="sv-mini sv-leave" data-r="leaveBtn">Leave</button>
         </div>
         <div class="sv-zone" data-r="oppZone">
           <div class="sv-zlabel"><b>Opponent</b> <span data-r="oppInfo"></span></div>
           <div class="sv-village" data-r="oppVillage"></div>
         </div>
-        <div class="sv-table">
-          <div class="sv-pile"><div data-r="deck"></div><small data-r="deckLabel"></small></div>
-          <div class="sv-pile"><div data-r="discard"></div><small>Discard</small></div>
-          <div class="sv-pile"><div data-r="drawn"></div><small data-r="drawnLabel">&nbsp;</small></div>
-          <div class="sv-pile"><div data-r="amulet"></div><small data-r="amuletLabel">&nbsp;</small></div>
+        <div class="sv-mid">
+          <div class="sv-table">
+            <div class="sv-pile"><div data-r="deck"></div><small data-r="deckLabel"></small></div>
+            <div class="sv-pile"><div data-r="discard"></div><small>Discard</small></div>
+            <div class="sv-pile"><div data-r="drawn"></div><small data-r="drawnLabel">&nbsp;</small></div>
+            <div class="sv-pile" data-r="amuletPile"><div data-r="amulet"></div><small data-r="amuletLabel">&nbsp;</small></div>
+          </div>
+          <div class="sv-say">
+            <div class="sv-prompt" data-r="prompt"></div>
+            <div class="sv-actions" data-r="actions"></div>
+          </div>
         </div>
-        <div class="sv-prompt" data-r="prompt"></div>
-        <div class="sv-actions" data-r="actions"></div>
         <div class="sv-zone" data-r="myZone">
-          <div class="sv-village" data-r="myVillage"></div>
           <div class="sv-zlabel"><b>Your village</b> <span data-r="myInfo"></span></div>
+          <div class="sv-village" data-r="myVillage"></div>
         </div>
-        <details class="sv-panel" open><summary>Scores</summary><div data-r="scores"></div></details>
-        <details class="sv-panel"><summary>Log</summary><div class="sv-log" data-r="log"></div></details>
         <div class="sv-overlay" data-r="overlay" hidden><div class="sv-box" data-r="box"></div></div>
       </div>`;
     const R = {};
     rootEl.querySelectorAll('[data-r]').forEach(el => { R[el.dataset.r] = el; });
+    R.scores = document.createElement('div');   // rendered off-screen, shown in the Scores pop-up
+    R.log = document.createElement('div');
     R.rulesBtn.onclick = showRules;
+    R.scoresBtn.onclick = () => showPanel('Scores', R.scores.innerHTML);
+    R.logBtn.onclick = () => showPanel('Log', '<div class="sv-log">' + R.log.innerHTML + '</div>');
+    R.leaveBtn.onclick = () => { if (opts.onLeave) opts.onLeave(); };
     R.overlay.addEventListener('click', e => { if (e.target === R.overlay) R.overlay.hidden = true; });
 
     const isMine = () => view && view.phase === 'play' && view.turn === view.me;
@@ -609,7 +622,10 @@
 
       renderPrompt();
       renderScores();
+      R.scoreChip.textContent = 'You ' + v.totals[me] + ' · Opp ' + v.totals[op];
+      R.amuletPile.hidden = !(v.amulet !== null && v.amuletOn === null);
       R.log.innerHTML = v.log.slice().reverse().map(e => '<div class="sv-log-' + e.who + '">' + e.t + '</div>').join('');
+      fit();
       animateFrom(snap);
 
       if (v.phase === 'roundEnd' || v.phase === 'gameOver') showSummary();
@@ -715,6 +731,67 @@
       actions.append(b1, b2);
       if (R.overlay.dataset.shownFor !== String(v.round) + v.phase) { R.overlay.hidden = false; R.overlay.dataset.shownFor = String(v.round) + v.phase; }
     }
+    function showPanel(title, html) {
+      R.box.innerHTML = '<h2>' + title + '</h2>' + html + '<div class="sv-box-actions"><button class="sv-btn sv-primary">Close</button></div>';
+      R.box.querySelector('.sv-box-actions button').onclick = () => { R.overlay.hidden = true; };
+      R.overlay.dataset.shownFor = 'panel'; R.overlay.hidden = false;
+    }
+
+    /* ---- sizing: cards as big as the window allows, no scrolling ----
+       Three card rows (opponent, table, you) share the height left after the bars;
+       five cards must fit side by side. Bigger villages overlap instead of wrapping. */
+    const GAP = 6;
+    function fit() {
+      const sv = rootEl.firstElementChild;
+      const H = rootEl.clientHeight, W = rootEl.clientWidth;
+      if (!sv || !H || !W) return;
+      const top = sv.querySelector('.sv-top'), table = sv.querySelector('.sv-table'), say = sv.querySelector('.sv-say');
+      const nMax = Math.max(5, R.oppVillage.children.length, R.myVillage.children.length);
+      let layout = { r: 1, per: nMax };
+      for (let pass = 0; pass < 4; pass++) {
+        const cw = parseFloat(sv.style.getPropertyValue('--cw')) || 60, ch = cw * 1.5;
+        // height of everything that is not a card: bars, labels, paddings, prompt
+        const zoneExtra = (R.oppZone.offsetHeight - R.oppVillage.offsetHeight) + (R.myZone.offsetHeight - R.myVillage.offsetHeight);
+        const tableExtra = table.offsetHeight - ch;
+        const wrapped = say.offsetTop > table.offsetTop + 4;           // prompt sits under the piles
+        const midExtra = wrapped ? tableExtra + 4 + say.offsetHeight : Math.max(tableExtra, say.offsetHeight - ch);
+        const other = top.offsetHeight + zoneExtra + midExtra + GAP * 3 + 2;
+        const rowW = R.myZone.clientWidth - 16;
+        // one row per village, or two rows (tall, narrow screens) if that makes cards clearly bigger
+        let best = null;
+        for (const r of [1, 2]) {
+          const per = Math.ceil(nMax / r);
+          const byWidth = (rowW - (per - 1) * GAP) / per;
+          const byHeight = (H - other - 2 * (r - 1) * GAP) / ((2 * r + 1) * 1.5);
+          const w = Math.max(28, Math.min(byWidth, byHeight, 170));
+          if (!best || w > best.w * 1.12) best = { w, r, per };
+        }
+        layout = best;
+        sv.dataset.rows = best.r;
+        const done = Math.abs(best.w - cw) < 0.5;
+        sv.style.setProperty('--cw', best.w.toFixed(1) + 'px');
+        if (done) break;
+      }
+      const w = parseFloat(sv.style.getPropertyValue('--cw'));
+      for (const row of [R.oppVillage, R.myVillage]) {
+        row.style.maxWidth = layout.r === 2 ? (layout.per * w + (layout.per - 1) * GAP) + 'px' : '';
+      }
+      overlapRows(layout.r);
+    }
+    function overlapRows(rows) {
+      for (const row of [R.oppVillage, R.myVillage]) {
+        const cards = Array.from(row.children), n = cards.length;
+        if (!n) continue;
+        if (rows === 2) { cards.forEach(c => { c.style.marginLeft = ''; }); continue; }
+        const w = cards[0].offsetWidth, avail = row.clientWidth;
+        const need = n * w + (n - 1) * GAP;
+        const m = need > avail && n > 1 ? (avail - n * w) / (n - 1) : GAP;
+        cards.forEach((c, i) => { c.style.marginLeft = i ? m + 'px' : '0'; });
+      }
+    }
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => fit()) : null;
+    if (ro) ro.observe(rootEl);
+
     function showRules() {
       let ref = '';
       for (let v = 0; v <= 13; v++) ref += '<li><b>' + v + ' ' + CARDS[v].name + '</b> ×' + COUNT(v) + ' — ' + CARDS[v].text + '</li>';
@@ -846,6 +923,7 @@
       R.prompt.textContent = text || 'Waiting for the host to deal…';
     }
     function destroy() {
+      if (ro) ro.disconnect();
       document.removeEventListener('pointerdown', onDown);
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);

@@ -1,40 +1,61 @@
 /* Silver (2-player PvP) — scoped under .sv so it doesn't touch the other games. */
-.silver-screen { padding-left: 8px; padding-right: 8px; }
+
+/* The Silver screen takes the whole window and never scrolls. */
+.silver-screen {
+  position: fixed; inset: 0; z-index: 5; gap: 0;
+  padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right))
+           max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  background: var(--bg); overflow: hidden; animation: none;
+}
+#silver-root { flex: 1; min-height: 0; width: 100%; }
+body:has(.silver-screen:not([hidden])) { overflow: hidden; }
+body:has(.silver-screen:not([hidden])) .banner:not([hidden]) { position: fixed; top: 8px; left: 8px; right: 8px; z-index: 60; }
+
 .sv {
-  --cw: clamp(46px, 15vw, 84px);
+  --cw: 60px;                      /* set by fit() in silver.js */
   --ch: calc(var(--cw) * 1.5);
   --sv-gold: #d8b45a;
   --sv-sel: #5aa9e6;
   --sv-ok: #6cc28a;
-  display: flex; flex-direction: column; gap: 10px;
-  width: 100%; max-width: 760px; margin: 0 auto;
+  height: 100%; display: flex; flex-direction: column; gap: 6px;
+  width: 100%; max-width: 1200px; margin: 0 auto; overflow: hidden;
   user-select: none; -webkit-user-select: none;
 }
-.sv-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px;
-  background: var(--surface); border-radius: 10px; }
-.sv-round { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-.sv-turn { font-weight: 700; font-size: 13px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); }
+.sv-top { display: flex; align-items: center; gap: 6px; padding: 4px 6px; flex: none;
+  background: var(--surface); border-radius: 10px; min-width: 0; }
+.sv-spacer { flex: 1; }
+.sv-score { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.sv-leave { border-color: #7a3a35; color: #f0a39c; }
+.sv-round { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
+.sv-turn { font-weight: 700; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); white-space: nowrap; }
 .sv-turn-mine { background: #3b3420; color: #f3dc9c; box-shadow: 0 0 0 1px var(--sv-gold); }
 .sv-mini, .sv-btn { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
   padding: 8px 14px; font: inherit; font-size: 14px; cursor: pointer; width: auto; }
-.sv-mini { padding: 4px 10px; font-size: 12px; margin-left: auto; }
+.sv-mini { padding: 4px 8px; font-size: 12px; flex: none; }
 .sv-btn:disabled { opacity: .4; cursor: not-allowed; }
 .sv-primary { background: #3b3420; border-color: var(--sv-gold); color: #f3dc9c; }
 .sv-danger { border-color: #7a3a35; color: #f0a39c; }
 
-.sv-zone { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; }
+.sv-zone { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px 8px 6px; flex: none; }
 .sv-zone.sv-active { border-color: var(--sv-gold); box-shadow: 0 0 0 1px #d8b45a55, 0 0 20px #d8b45a22; }
-.sv-zlabel { color: var(--muted); font-size: 12px; margin: 2px; }
+.sv-zlabel { color: var(--muted); font-size: 11px; line-height: 15px; margin: 0 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sv-zlabel b { color: var(--text); }
-.sv-village { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: calc(var(--ch) + 10px); padding: 4px 2px; }
+.sv-village { display: flex; flex-wrap: nowrap; justify-content: center; align-items: center; height: var(--ch); margin: 0 auto; }
+.sv[data-rows="2"] .sv-village { flex-wrap: wrap; gap: 6px; align-content: center; height: calc(var(--ch) * 2 + 6px); }
+.sv-village .sv-card { flex: none; }
+.sv-village .sv-click:hover, .sv-village .sv-selected, .sv-village .sv-drop-hover { z-index: 6; }
 
-.sv-table { display: flex; justify-content: center; align-items: flex-end; gap: clamp(8px, 4vw, 24px); padding: 6px 0 0; }
-.sv-pile { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.sv-pile small { color: var(--muted); font-size: 11px; }
-.sv-prompt { text-align: center; color: #f3dc9c; font-size: 14px; min-height: 40px; line-height: 1.45; }
+.sv-mid { flex: 1; min-height: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 18px; }
+.sv-table { display: flex; justify-content: center; align-items: flex-end; gap: clamp(8px, 3vw, 22px); }
+.sv-pile { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.sv-pile[hidden] { display: none; }
+.sv-pile small { color: var(--muted); font-size: 10px; line-height: 13px; white-space: nowrap; }
+.sv-say { flex: 1 1 260px; max-width: 460px; min-height: 74px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.sv-prompt { text-align: center; color: #f3dc9c; font-size: 13px; line-height: 1.35; }
 .sv-muted { color: var(--muted); }
 .sv-sel-note { color: var(--sv-sel); }
-.sv-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; min-height: 6px; }
+.sv-actions { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.sv-actions .sv-btn { padding: 6px 12px; font-size: 13px; }
 
 /* cards */
 .sv-card { width: var(--cw); height: var(--ch); border-radius: 8px; position: relative; flex: none;
@@ -68,7 +89,7 @@
 .sv-empty { width: var(--cw); height: var(--ch); border-radius: 8px; border: 2px dashed var(--border);
   display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: 10px; padding: 4px;
   outline: 3px solid transparent; outline-offset: 2px; }
-.sv-amulet { width: 44px; height: 44px; border-radius: 50%; margin: calc((var(--ch) - 44px) / 2) 6px;
+.sv-amulet { width: 44px; height: 44px; border-radius: 50%; margin: calc((var(--ch) - 44px) / 2) 0;
   display: flex; align-items: center; justify-content: center; font-size: 20px; color: #333;
   background: radial-gradient(circle at 35% 30%, #fff, #b9bec9 45%, #7d8391); border: 2px solid #e8eaef; box-shadow: 0 3px 10px #000a; }
 
@@ -82,12 +103,10 @@
 .sv-empty.sv-droppable { border-color: var(--sv-ok); color: var(--sv-ok); }
 .sv-drop-hover { outline-color: var(--sv-ok) !important; transform: translateY(-6px) scale(1.04); }
 
-/* panels */
-.sv-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; }
-.sv-panel summary { cursor: pointer; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+/* pop-up panels */
 .sv-scores { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
 .sv-scores td, .sv-scores th { padding: 3px 6px; text-align: center; border-bottom: 1px solid var(--border); }
-.sv-log { max-height: 220px; overflow: auto; display: flex; flex-direction: column; gap: 3px; font-size: 13px; margin-top: 6px; }
+.sv-log { max-height: 60vh; overflow: auto; display: flex; flex-direction: column; gap: 3px; font-size: 13px; margin-top: 6px; }
 .sv-log div { padding: 3px 6px; border-radius: 6px; background: var(--surface-2); }
 .sv-log-you { border-left: 3px solid var(--sv-sel); }
 .sv-log-opp { border-left: 3px solid #d9645a; }
@@ -103,7 +122,12 @@
 .sv-win { color: var(--green); }
 .sv-lose { color: var(--red); }
 .sv-mini-row { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0 10px; }
-.sv-small { --cw: 44px; }
+.sv-small { --cw: 44px; --ch: 66px; }
 .sv-box-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
 .sv-ref { padding-left: 18px; font-size: 13px; }
 .sv-ref li { margin: 3px 0; }
+
+@media (max-width: 430px) {
+  .sv-score { display: none; }
+  .sv-mini { padding: 4px 6px; font-size: 11px; }
+}

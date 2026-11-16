@@ -170,12 +170,7 @@ button.secondary:hover { background: var(--surface); }
 }
 .digits-options[hidden] { display: none; }
 
-/* ---- Silver screen (game styles live in silver/silver.css) ---- */
-.silver-bottom {
-  display: flex;
-  justify-content: center;
-  margin-top: 12px;
-}
+/* ---- Silver screen: styles live in silver/silver.css ---- */
 
 /* ---- Game screen (shared header & history) ---- */
 .game-header {
